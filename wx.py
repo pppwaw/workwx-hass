@@ -1,4 +1,4 @@
-version='1.0.2'
+version='1.0.3'
 import workwerobot,json,re,requests,aip,base64
 from hassbridge import *
 def gnuversion(version1,version2):
@@ -207,7 +207,7 @@ class wxrobot:
         return "未知命令！"
 if __name__ == "__main__":
     try:
-        a = requests.get("https://raw.githubusercontent.com/pppwaw/wxmp-hass/master/wx.py").text.splitlines()[0].split("=")[1]
+        a = requests.get("https://raw.githubusercontent.com/pppwaw/workwx-hass/master/wx.py").text.splitlines()[0].split("=")[1]
         if gnuversion(version,a) == 2:
             print("有更新！最新版本："+a)
     finally:
