@@ -1,10 +1,11 @@
-import requests,json
+import requests,json,threading
+from sseclient import SSEClient
 class AuthenticationError(Exception):
     pass
 class HASS:
-    def __init__(self,config):
+    def __init__(self,config,client):
         self.config=config
-        self.headers={'Authorization': "Bearer " + config["token"],"Content-Type": "application/json"}
+        self.headers={'Authorization': "Bearer " + config["token"]}
         self.api=config["address"]+"/api/"
         self.states={}
         tmp=self.__test_auth()
@@ -16,6 +17,7 @@ class HASS:
         with open("config.json","w",encoding='UTF-8') as f:
             j["hass"]["setname"] = self.states
             f.write(json.dumps(j,indent=4,ensure_ascii=False))
+        threading.Thread(target=self.__event,args=(client,)).start()
     def __test_auth(self):
         tmp=requests.get(self.api,headers=self.headers)
         if tmp.status_code == 401:
@@ -66,3 +68,25 @@ class HASS:
         except:
             return None
         return rtn
+    def __event(self,client):
+        messages = SSEClient(self.api+'stream', headers=self.headers)
+        for message in messages:
+            if message.data=="ping":
+                continue
+            msg=json.loads(message.data)
+            if msg["event_type"] == "state_changed":
+                if "motion" in msg["data"]["entity_id"]:
+                    if msg["data"]["new_state"]["state"] == "on":
+                        client.send_text_message(self.states[msg["data"]["entity_id"]]+"被触发了")
+                elif msg["data"]["new_state"]["state"] == "on":
+                    if msg["data"]["old_state"]["state"] == "unavailable":
+                        client.send_text_message(self.states[msg["data"]["entity_id"]] + "可用了")
+                        continue
+                    client.send_text_message(self.states[msg["data"]["entity_id"]] + "被打开了")
+                elif msg["data"]["new_state"]["state"] == "off":
+                    if msg["data"]["old_state"]["state"] == "unavailable":
+                        client.send_text_message(self.states[msg["data"]["entity_id"]] + "可用了")
+                        continue
+                    client.send_text_message(self.states[msg["data"]["entity_id"]] + "被关闭了")
+                elif msg["data"]["new_state"]["state"] == "unavailable":
+                    client.send_text_message(self.states[msg["data"]["entity_id"]] + "不可用")

@@ -1,5 +1,5 @@
 version='1.0.2'
-import werobot,json,re,requests,aip,base64
+import workwerobot,json,re,requests,aip,base64
 from hassbridge import *
 def gnuversion(version1,version2):
     v1 = version1.split(".")
@@ -14,14 +14,16 @@ def gnuversion(version1,version2):
         else:return 1
     else:return 1
 class wxrobot:
-    def __init__(self,hass,face:dict,config:dict,users:dict,regex:dict):
-        self.hass=hass
-        self.face=aip.AipFace(str(face["appId"]),face["apiKey"],face["secretKey"])
+    def __init__(self,hass,face:dict,voice:dict,config:dict,users:dict,regex:dict):
+        self.face = aip.AipFace(str(face["appId"]), face["apiKey"], face["secretKey"])
+        self.voice = aip.AipSpeech(str(voice["appId"]), voice["apiKey"], voice["secretKey"])
         if self.face.getGroupUsers("werobot")["error_code"] != 0:
             raise AuthenticationError("人脸识别认证错误！")
-        self.robot = werobot.WeRoBot()
+        self.robot = workwerobot.WeRoBot()
         for k,v in config.items():
             self.robot.config[k]=v
+        self.client=self.robot.client
+        self.hass=HASS(hass,self.client)
         self.users=users
         self.regex=regex
         self.robot.config['HOST'] = '0.0.0.0'
@@ -44,7 +46,11 @@ class wxrobot:
         if "block" not in session:
             if "user" in session:
                 if "face" in session:
-                    if message.type == "voice": text = message.recognition
+                    if message.type == "voice":
+                        v=self.client.download_media(message.media_id)
+                        print(v.url,message.format)
+                        temp=self.voice.asr(v.content,message.format,8000)
+                        text=temp["result"][0]
                     elif message.type == "text": text=message.content
                     else:return "不支持图片！"
                     text.replace("跳", "调")
@@ -164,7 +170,7 @@ class wxrobot:
             if find:
                 find=find[0]
                 entity_id=list(self.hass.states.keys())[list(self.hass.states.values()).index(find[0])]
-                #state=self.hass.getstate(entity_id)
+                print(find)
                 data = {"entity_id": entity_id}
                 try:
                     if find[0].split("的")[-1] == "空调":
@@ -207,6 +213,5 @@ if __name__ == "__main__":
     finally:
         with open("config.json",encoding='UTF-8') as f:
             config = json.loads(f.read())
-        hass=HASS(config["hass"])
-        robot=wxrobot(hass,config["face"],config["wx"],config["users"],config["regex"])
+        robot=wxrobot(config["hass"],config["face"],config["voice"],config["wx"],config["users"],config["regex"])
         robot.run()
